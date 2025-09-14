@@ -1,0 +1,29 @@
+# CPUWARP-ML Requirements
+# Core dependencies for CPU-optimized ML training
+
+# Essential packages
+numpy>=1.19.0
+scipy>=1.5.0
+psutil>=5.7.0
+py-cpuinfo>=8.0.0
+
+# Optional but recommended
+# Uncomment if you want additional features
+
+# For better performance (if available on your system)
+# intel-numpy  # Intel optimized NumPy (for Intel CPUs)
+# mkl  # Intel Math Kernel Library
+
+# For data loading
+# pillow>=8.0.0  # Image processing
+# librosa>=0.8.0  # Audio processing
+# pandas>=1.2.0  # Data manipulation
+
+# For visualization (optional)
+# matplotlib>=3.3.0
+# seaborn>=0.11.0
+
+# For development
+# pytest>=6.0.0
+# black>=21.0.0
+# flake8>=3.8.0
