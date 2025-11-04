@@ -11,7 +11,7 @@ import pickle
 import time
 import logging
 from typing import Dict, List, Tuple, Optional, Any
-from config import get_config
+from config import get_config, get_env_value
 import multiprocessing as mp
 from multiprocessing import Queue, Process, Lock
 
@@ -23,11 +23,11 @@ class DistributedTrainer:
     def __init__(self, model, config=None):
         self.model = model
         self.config = config or get_config()
-        self.world_size = self.config.get_env_value('WORLD_SIZE', 1, int)
-        self.rank = self.config.get_env_value('RANK', 0, int)
-        self.master_addr = self.config.get_env_value('MASTER_ADDR', 'localhost')
-        self.master_port = self.config.get_env_value('MASTER_PORT', 12355, int)
-        self.is_distributed = self.config.get_env_value('DISTRIBUTED', False, bool)
+        self.world_size = get_env_value('WORLD_SIZE', 1, int)
+        self.rank = get_env_value('RANK', 0, int)
+        self.master_addr = get_env_value('MASTER_ADDR', 'localhost')
+        self.master_port = get_env_value('MASTER_PORT', 12355, int)
+        self.is_distributed = get_env_value('DISTRIBUTED', False, bool)
         
         if self.is_distributed:
             self.setup_distributed()
@@ -114,8 +114,8 @@ class ModelCompiler:
     def __init__(self, model):
         self.model = model
         self.config = get_config()
-        self.compile_enabled = self.config.get_env_value('COMPILE_MODEL', False, bool)
-        self.channels_last = self.config.get_env_value('CHANNELS_LAST', False, bool)
+        self.compile_enabled = get_env_value('COMPILE_MODEL', False, bool)
+        self.channels_last = get_env_value('CHANNELS_LAST', False, bool)
     
     def compile_model(self):
         """Compile model for optimized execution"""
@@ -167,8 +167,8 @@ class ModelOptimizer:
     def __init__(self, model):
         self.model = model
         self.config = get_config()
-        self.fused_adam = self.config.get_env_value('FUSED_ADAM', True, bool)
-        self.gradient_checkpointing = self.config.get_env_value('GRADIENT_CHECKPOINTING', False, bool)
+        self.fused_adam = get_env_value('FUSED_ADAM', True, bool)
+        self.gradient_checkpointing = get_env_value('GRADIENT_CHECKPOINTING', False, bool)
     
     def get_optimizer(self, learning_rate: float):
         """Get optimized optimizer"""
@@ -243,7 +243,7 @@ class ModelExporter:
     
     def export_onnx(self, output_path: str = "model.onnx"):
         """Export model to ONNX format"""
-        if not self.config.get_env_value('EXPORT_ONNX', False, bool):
+        if not get_env_value('EXPORT_ONNX', False, bool):
             return
         
         logger.info(f"Exporting model to ONNX: {output_path}")
@@ -267,7 +267,7 @@ class ModelExporter:
     
     def export_torchscript(self, output_path: str = "model.pt"):
         """Export model to TorchScript format"""
-        if not self.config.get_env_value('EXPORT_TORCHSCRIPT', False, bool):
+        if not get_env_value('EXPORT_TORCHSCRIPT', False, bool):
             return
         
         logger.info(f"Exporting model to TorchScript: {output_path}")
@@ -291,10 +291,10 @@ class ModelExporter:
     
     def export_quantized(self, output_path: str = "model_quantized.npz"):
         """Export quantized model"""
-        if not self.config.get_env_value('QUANTIZE_MODEL', False, bool):
+        if not get_env_value('QUANTIZE_MODEL', False, bool):
             return
         
-        bits = self.config.get_env_value('QUANTIZATION_BITS', 8, int)
+        bits = get_env_value('QUANTIZATION_BITS', 8, int)
         logger.info(f"Quantizing model to {bits} bits")
         
         weights = self._extract_weights()
@@ -409,18 +409,18 @@ def enable_advanced_features(model):
     config = get_config()
     
     # Apply model compilation
-    if config.get_env_value('COMPILE_MODEL', False, bool):
+    if get_env_value('COMPILE_MODEL', False, bool):
         compiler = ModelCompiler(model)
         model = compiler.compile_model()
     
     # Setup distributed training
-    if config.get_env_value('DISTRIBUTED', False, bool):
+    if get_env_value('DISTRIBUTED', False, bool):
         distributed = DistributedTrainer(model)
         model._distributed = distributed
     
     # Setup optimizer
     optimizer = ModelOptimizer(model)
-    if config.get_env_value('GRADIENT_CHECKPOINTING', False, bool):
+    if get_env_value('GRADIENT_CHECKPOINTING', False, bool):
         optimizer.apply_gradient_checkpointing()
     
     # Setup mixed precision
