@@ -27,3 +27,8 @@ py-cpuinfo>=8.0.0
 # pytest>=6.0.0
 # black>=21.0.0
 # flake8>=3.8.0
+# --- FastAPI Daemon Dependencies ---
+# Required to run the web interface (xtrain_daemon.py)
+fastapi>=0.104.1   
+uvicorn[standard]>=0.23.0 # ASGI server to run FastAPI
+pydantic>=2.4      # Data validation and serialization
