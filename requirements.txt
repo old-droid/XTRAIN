@@ -27,3 +27,7 @@ py-cpuinfo>=8.0.0
 # pytest>=6.0.0
 # black>=21.0.0
 # flake8>=3.8.0
+
+# For API Service
+Flask>=2.0.0
+requests>=2.25.0
