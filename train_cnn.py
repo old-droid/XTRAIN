@@ -95,9 +95,21 @@ class Dense:
     
     def forward(self, x: np.ndarray) -> np.ndarray:
         """Forward pass using CPUWARP-ML optimized matrix multiplication"""
+        self.x_cache = x
         output = cpuwarp_ml.matmul(x, self.weights) + self.bias
         return output
-
+    def backward(self, dout: np.ndarray):
+        """Backward pass for Dense layer."""
+        x = self.x_cache
+        
+        dW = cpuwarp_ml.matmul(x.T, dout)
+        
+        dB = np.sum(dout, axis=0)
+        
+        dX = cpuwarp_ml.matmul(dout, self.weights.T)
+        
+        return dX, dW, dB
+        
 class BatchNorm2D:
     """2D Batch normalization layer"""
     
@@ -445,4 +457,5 @@ def main():
         print("Training completed!")
 
 if __name__ == "__main__":
+
     main()
