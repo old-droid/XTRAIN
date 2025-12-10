@@ -375,6 +375,10 @@ class OptimizedKernels:
         exp_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
         return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
 
+    def gelu(self, x:np.ndarray) -> np.ndarray:
+        """GeLu activation function"""
+        return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * (x ** 3))))
+
 class MemoryManager:
     """Optimized memory management with cache blocking and NUMA awareness"""
     
@@ -478,6 +482,8 @@ class ComputeEngine:
             return self.kernels.relu(args[0])
         elif operation == 'softmax':
             return self.kernels.softmax(args[0], **kwargs)
+        elif operation == 'gelu':
+            return self.kernels.gelu(args[0])
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -510,6 +516,10 @@ class CPUWarpML:
     def softmax(self, x: np.ndarray, axis: int = -1) -> np.ndarray:
         """Softmax activation with WARP optimization"""
         return self.compute_engine.execute_operation('softmax', x, axis=axis)
+
+    def gelu(self, x: np.ndarray) -> np.ndarray:
+        """GELU activation with WARP optimization"""
+        return self.compute_engine.execute_operation('gelu', x)
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
@@ -546,6 +556,11 @@ def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     """Global softmax function"""
     return cpuwarp.softmax(x, axis=axis)
 
+def gelu(x: np.ndarray) -> np.ndarray:
+    """Global GELU function"""
+    return cpuwarp.gelu(x)
+
+
 if __name__ == "__main__":
     # Quick performance test
     print("CPUWARP-ML Performance Test")
@@ -575,4 +590,5 @@ if __name__ == "__main__":
     print("\nFramework Statistics:")
     stats = cpuwarp.get_performance_stats()
     for key, value in stats['cpu_info'].items():
+
         print(f"  {key}: {value}")
