@@ -101,14 +101,26 @@ class Dense:
     def backward(self, dout: np.ndarray):
         """Backward pass for Dense layer."""
         x = self.x_cache
+        B, L, _ = x.shape
+        x_flat = x.reshape(B * L, self.in_features)
+        dout_flat = dout.reshape(B * L, self.out_features)
         
-        dW = cpuwarp_ml.matmul(x.T, dout)
+        dW = cpuwarp_ml.matmul(x_flat.T, dout_flat)
         
-        dB = np.sum(dout, axis=0)
+        # dB: Sum over the B*L dimension
+        dB = np.sum(dout_flat, axis=0)
         
-        dX = cpuwarp_ml.matmul(dout, self.weights.T)
+        # dX: (B*L, D_out) @ (D_out, D_in) -> (B*L, D_in)
+        dX_flat = cpuwarp_ml.matmul(dout_flat, self.weights.data.T)
         
-        return dX, dW, dB
+        # Reshape dX back to (B, L, D_in)
+        dX = dX_flat.reshape(B, L, self.in_features)
+        
+        # Accumulate gradients
+        self.weights.grad += dW
+        self.bias.grad += dB
+        
+        return dX
         
 class BatchNorm2D:
     """2D Batch normalization layer"""
@@ -459,3 +471,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
