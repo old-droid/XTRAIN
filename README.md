@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 
-## 🎯 For Absolute Beginners - Start Here!
+##  For Absolute Beginners - Start Here!
 
 ### ✨ The EASIEST Way - Interactive Training Menu:
 ```bash
@@ -11,9 +11,9 @@
 python simple_train.py
 ```
 
-This opens a friendly menu where you can choose what to train! 🎉
+This opens a friendly menu where you can choose what to train! 
 
-### 🚀 Or Use Quick Commands:
+###  Or Use Quick Commands:
 ```bash
 # 1. Install (one time only)
 pip install numpy scipy psutil py-cpuinfo
@@ -25,14 +25,14 @@ python run_model.py --model llm --mode train --epochs 1
 python run_model.py --model cnn --mode train --epochs 1
 ```
 
-**That's it! You now have a trained AI model!** 🎉
+**That's it! You now have a trained AI model!** 
 
 ### What Can You Build?
-- 💬 **Chatbots** - Train your own conversational AI
-- 🖼️ **Image Recognition** - Identify objects in photos
-- 😊 **Emotion AI** - Understand and express emotions
-- 🎨 **Multimodal AI** - Combine images + text understanding
-- 🔮 **Custom Neural Networks** - Build anything you imagine!
+-  **Chatbots** - Train your own conversational AI
+- **Image Recognition** - Identify objects in photos
+-  **Emotion AI** - Understand and express emotions
+-  **Multimodal AI** - Combine images + text understanding
+-  **Custom Neural Networks** - Build anything you imagine!
 
 ---
 
@@ -40,15 +40,15 @@ python run_model.py --model cnn --mode train --epochs 1
 
 **CPUWARP-ML** is a purpose-built, high-performance machine learning training framework optimized specifically for AMD and Intel CPUs. It outperforms TensorFlow and PyTorch CPU backends through innovative **Workload-Aware Resource Partitioning (WARP)**, optimized NumPy operations, and SIMD-accelerated C extensions.
 
-## 🚀 Key Features
+##  Key Features
 
-- **🎯 CPU-First Design**: Built from ground up for CPU training, not GPU ported
-- **⚡ WARP Technology**: Dynamic resource allocation based on workload characteristics  
-- **🔧 SIMD Optimization**: AVX2, FMA, and AVX-512 instruction support
-- **🏗️ Modular Architecture**: Easy to extend and customize
-- **📊 Performance Focus**: 10-20% faster than TensorFlow/PyTorch CPU backends
-- **🔄 Auto-Optimization**: Adaptive scheduling based on CPU architecture
-- **💾 Memory Efficient**: Cache-friendly algorithms and memory alignment
+- ** CPU-First Design**: Built from ground up for CPU training, not GPU ported
+- *WARP Technology**: Dynamic resource allocation based on workload characteristics  
+- ** SIMD Optimization**: AVX2, FMA, and AVX-512 instruction support
+- ** Modular Architecture**: Easy to extend and customize
+- ** Performance Focus**: 10-20% faster than TensorFlow/PyTorch CPU backends
+- ** Auto-Optimization**: Adaptive scheduling based on CPU architecture
+- ** Memory Efficient**: Cache-friendly algorithms and memory alignment
 
 ## 📈 Performance Comparison
 
@@ -126,7 +126,7 @@ python run_model.py --model cnn --mode train --epochs 1
 - NUMA-aware allocation strategies
 - Prefetching hints for better cache utilization
 
-## 📦 Installation
+##  Installation
 
 ### Quick Start (Windows)
 ```bash
@@ -156,9 +156,9 @@ python cpuwarp_ml.py
 - **Memory**: 8GB+ RAM recommended
 - **Compiler** (optional): MSVC 2019+, GCC 7+, or MinGW-w64
 
-## 🚀 Quick Start - Train Your First Model in 1 Minute!
+##  Quick Start - Train Your First Model in 1 Minute!
 
-### 🎯 Super Simple: One-Command Training
+### Super Simple: One-Command Training
 
 ```bash
 # Train a Language Model (LLM) - Just run this!
@@ -173,7 +173,7 @@ python run_model.py --model multimodal --mode train
 
 That's it! The framework handles everything else automatically.
 
-## 🧠 Building Your Own Neural Network (Easy Mode)
+## Building Your Own Neural Network (Easy Mode)
 
 ### Step 1: Simple Emotion Recognition Network
 ```python
@@ -189,7 +189,7 @@ class EmotionAI:
         self.layer3 = np.random.randn(20, 6) * 0.1    # Hidden to emotions
         
         # 6 emotions: happy, sad, angry, surprised, neutral, excited
-        self.emotions = ['😊 Happy', '😢 Sad', '😠 Angry', '😲 Surprised', '😐 Neutral', '🎉 Excited']
+        self.emotions = [' Happy', ' Sad', ' Angry', ' Surprised', ' Neutral', ' Excited']
     
     def feel(self, input_text):
         # Convert text to numbers (simplified)
@@ -208,7 +208,7 @@ class EmotionAI:
 
 # Use it!
 ai = EmotionAI()
-print(ai.feel("You are amazing!"))  # Output: I feel 😊 Happy (confidence: 87%)
+print(ai.feel("You are amazing!"))  # Output: I feel  Happy (confidence: 87%)
 ```
 
 ### Step 2: Train Your Emotion AI
@@ -223,7 +223,7 @@ python run_model.py --model cnn --dataset cifar10 --epochs 1
 # ✅ Saves the trained model
 ```
 
-## 🤖 Create Your Own Language Model (LLM)
+##  Create Your Own Language Model (LLM)
 
 ### The Simplest LLM Ever:
 ```python
@@ -282,7 +282,7 @@ assistant.train(epochs=5, batch_size=4)
 # Output: "A cat sitting on a couch"
 ```
 
-## 🎮 Interactive Training - See Your Model Learn!
+## Interactive Training - See Your Model Learn!
 
 ```bash
 # Interactive mode with live metrics
@@ -294,7 +294,7 @@ python run_model.py --model llm --mode train --epochs 1
 # Model saved! Ready to use.
 ```
 
-## 🔥 Pre-Configured Models (Just Use Them!)
+##  Pre-Configured Models (Just Use Them!)
 
 ### 1. Text Generation Model
 ```bash
@@ -314,7 +314,7 @@ python run_model.py --model cnn --dataset cifar10 --mode train
 python run_model.py --model multimodal --dataset vqa --mode train
 ```
 
-## 💡 Tips for Beginners
+## Tips for Beginners
 
 ### Start Small
 ```python
@@ -347,7 +347,7 @@ logging.basicConfig(level=logging.INFO)
 # INFO: Loading dataset...
 # INFO: Training epoch 1/3...
 # INFO: Loss decreasing: 2.3 -> 1.8 -> 1.2
-# INFO: Model improving! 🎉
+# INFO: Model improving! 
 ```
 
 ## 🔧 Configuration
@@ -418,7 +418,7 @@ for size in [256, 512, 1024, 2048]:
 - **Convolution**: 1.2-1.6x speedup vs PyTorch
 - **Cache Efficiency**: 20-30% improvement
 
-## 🧠 WARP Algorithm Details
+##  WARP Algorithm Details
 
 ### Workload Classification
 CPUWARP-ML automatically classifies operations into:
@@ -628,3 +628,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For questions, issues, or feature requests, please open an issue on GitHub or contact the development team.
 
 *CPUWARP-ML - Making CPU training fast again! 🚀*
+
