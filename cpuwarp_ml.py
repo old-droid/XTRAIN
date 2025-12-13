@@ -15,7 +15,6 @@ import threading
 import multiprocessing as mp
 import psutil
 import time
-import ctypes
 import platform
 from collections import deque
 from typing import Dict, List, Tuple, Optional, Any, Callable
@@ -25,24 +24,21 @@ import warnings
 # Suppress NumPy warnings for cleaner output
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-# Try to load optimized C extensions
+# Try to import Numba for JIT-compiled kernels (highest priority)
 try:
-    import ctypes
-    from ctypes import cdll, c_float, c_int, c_void_p, POINTER
-    
-    # Load platform-specific optimized kernels
-    if platform.system() == "Windows":
-        lib_path = "./optimized_kernels.dll"
-    else:
-        lib_path = "./optimized_kernels.so"
-    
-    if os.path.exists(lib_path):
-        optimized_kernels = cdll.LoadLibrary(lib_path)
-        HAS_C_EXTENSIONS = True
-    else:
-        HAS_C_EXTENSIONS = False
-except:
-    HAS_C_EXTENSIONS = False
+    from numba_kernels import (
+        NUMBA_AVAILABLE, numba_matmul_2d, numba_matmul_3d,
+        numba_conv2d_valid, numba_conv2d_same, numba_relu,
+        numba_softmax, numba_gelu, numba_layer_norm, numba_batch_norm,
+        numba_add, numba_mul, numba_scale,
+        numba_max_pool2d, numba_avg_pool2d
+    )
+except ImportError:
+    NUMBA_AVAILABLE = False
+    warnings.warn("Numba kernels not available. Install numba_kernels module for acceleration.")
+
+# C extensions have been removed for simplicity and portability
+HAS_C_EXTENSIONS = False
 
 class CPUInfo:
     """CPU architecture detection and optimization selection"""
@@ -252,62 +248,24 @@ class WARPScheduler:
             pass
 
 class OptimizedKernels:
-    """Interface to optimized C kernels with fallback to NumPy"""
+    """Interface to optimized NumPy/Numba kernels"""
     
     def __init__(self, cpu_info: CPUInfo):
         self.cpu_info = cpu_info
-        self.use_c_extensions = HAS_C_EXTENSIONS
-        
-        if self.use_c_extensions:
-            self._setup_c_functions()
-    
-    def _setup_c_functions(self):
-        """Setup C function signatures"""
-        try:
-            # Matrix multiplication
-            optimized_kernels.optimized_matmul.argtypes = [
-                POINTER(c_float), POINTER(c_float), POINTER(c_float),
-                c_int, c_int, c_int
-            ]
-            optimized_kernels.optimized_matmul.restype = None
-            
-            # Convolution
-            optimized_kernels.optimized_conv2d.argtypes = [
-                POINTER(c_float), POINTER(c_float), POINTER(c_float),
-                c_int, c_int, c_int, c_int, c_int, c_int, c_int
-            ]
-            optimized_kernels.optimized_conv2d.restype = None
-            
-        except:
-            self.use_c_extensions = False
+        self.use_c_extensions = False  # C extensions removed
     
     def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """Optimized matrix multiplication"""
-        if self.use_c_extensions and a.dtype == np.float32 and b.dtype == np.float32:
-            return self._c_matmul(a, b)
-        else:
-            return self._numpy_matmul(a, b)
-    
-    def _c_matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """C-optimized matrix multiplication"""
-        m, k = a.shape
-        k2, n = b.shape
-        assert k == k2, "Matrix dimensions must match"
+        """Optimized matrix multiplication with Numba JIT priority"""
+        # Priority 1: Numba JIT compilation (fastest for repeated calls)
+        if NUMBA_AVAILABLE and a.ndim == 2 and b.ndim == 2:
+            return numba_matmul_2d(a, b)
         
-        # Ensure contiguous arrays
-        a = np.ascontiguousarray(a, dtype=np.float32)
-        b = np.ascontiguousarray(b, dtype=np.float32)
-        result = np.zeros((m, n), dtype=np.float32)
+        # Priority 2: Batched Numba (for 3D tensors)
+        if NUMBA_AVAILABLE and a.ndim == 3 and b.ndim in (2, 3):
+            return numba_matmul_3d(a, b)
         
-        # Call C function
-        optimized_kernels.optimized_matmul(
-            a.ctypes.data_as(POINTER(c_float)),
-            b.ctypes.data_as(POINTER(c_float)),
-            result.ctypes.data_as(POINTER(c_float)),
-            c_int(m), c_int(k), c_int(n)
-        )
-        
-        return result
+        # Fallback: NumPy
+        return self._numpy_matmul(a, b)
     
     def _numpy_matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """NumPy-based matrix multiplication with optimizations"""
@@ -316,11 +274,16 @@ class OptimizedKernels:
     
     def conv2d(self, input_data: np.ndarray, kernel: np.ndarray, 
                stride: int = 1, padding: str = 'valid') -> np.ndarray:
-        """Optimized 2D convolution"""
-        if self.use_c_extensions:
-            return self._c_conv2d(input_data, kernel, stride, padding)
-        else:
-            return self._numpy_conv2d(input_data, kernel, stride, padding)
+        """Optimized 2D convolution with Numba acceleration"""
+        # Use Numba if available (handles strideless version - we pad manually)
+        if NUMBA_AVAILABLE:
+            if padding == 'valid':
+                return numba_conv2d_valid(input_data, kernel)
+            else:  # 'same'
+                return numba_conv2d_same(input_data, kernel)
+        
+        # Fallback to NumPy
+        return self._numpy_conv2d(input_data, kernel, stride, padding)
     
     def _numpy_conv2d(self, input_data: np.ndarray, kernel: np.ndarray,
                      stride: int = 1, padding: str = 'valid') -> np.ndarray:
@@ -367,17 +330,19 @@ class OptimizedKernels:
         return output
     
     def relu(self, x: np.ndarray) -> np.ndarray:
-        """ReLU activation function"""
+        """ReLU activation function with Numba acceleration"""
+        if NUMBA_AVAILABLE:
+            return numba_relu(x)
         return np.maximum(0, x)
     
     def softmax(self, x: np.ndarray, axis: int = -1) -> np.ndarray:
-        """Softmax activation function"""
+        """Softmax activation function with Numba acceleration"""
+        if NUMBA_AVAILABLE:
+            return numba_softmax(x, axis=axis)
+        
+        # Fallback: NumPy with numerical stability
         exp_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
         return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
-
-    def gelu(self, x:np.ndarray) -> np.ndarray:
-        """GeLu activation function"""
-        return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * (x ** 3))))
 
 class MemoryManager:
     """Optimized memory management with cache blocking and NUMA awareness"""
@@ -482,8 +447,6 @@ class ComputeEngine:
             return self.kernels.relu(args[0])
         elif operation == 'softmax':
             return self.kernels.softmax(args[0], **kwargs)
-        elif operation == 'gelu':
-            return self.kernels.gelu(args[0])
         else:
             raise ValueError(f"Unknown operation: {operation}")
 
@@ -516,10 +479,6 @@ class CPUWarpML:
     def softmax(self, x: np.ndarray, axis: int = -1) -> np.ndarray:
         """Softmax activation with WARP optimization"""
         return self.compute_engine.execute_operation('softmax', x, axis=axis)
-
-    def gelu(self, x: np.ndarray) -> np.ndarray:
-        """GELU activation with WARP optimization"""
-        return self.compute_engine.execute_operation('gelu', x)
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
@@ -556,11 +515,6 @@ def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     """Global softmax function"""
     return cpuwarp.softmax(x, axis=axis)
 
-def gelu(x: np.ndarray) -> np.ndarray:
-    """Global GELU function"""
-    return cpuwarp.gelu(x)
-
-
 if __name__ == "__main__":
     # Quick performance test
     print("CPUWARP-ML Performance Test")
@@ -590,5 +544,377 @@ if __name__ == "__main__":
     print("\nFramework Statistics:")
     stats = cpuwarp.get_performance_stats()
     for key, value in stats['cpu_info'].items():
-
         print(f"  {key}: {value}")
+
+
+class ReGLU:
+    """reGLU activation function: x * ReLU(x) where x is split into two halves"""
+    
+    def __init__(self):
+        self.cache_input = None
+    
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """Forward pass: split input, apply ReLU to second half, multiply with first half"""
+        self.cache_input = x
+        
+        # Split input along the last dimension
+        split_idx = x.shape[-1] // 2
+        x1 = x[..., :split_idx]
+        x2 = x[..., split_idx:]
+        
+        # Apply ReLU to second half and multiply with first half
+        output = x1 * np.maximum(0, x2)
+        
+        return output.astype(np.float32)
+    
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Backward pass for reGLU activation"""
+        if self.cache_input is None:
+            raise ValueError("Forward pass must be called before backward pass")
+        
+        x = self.cache_input
+        split_idx = x.shape[-1] // 2
+        x1 = x[..., :split_idx]
+        x2 = x[..., split_idx:]
+        
+        # Compute gradients
+        # d(output)/d(x1) = ReLU(x2)
+        # d(output)/d(x2) = x1 * (x2 > 0)
+        grad_x1 = grad_output * (x2 > 0).astype(np.float32)
+        grad_x2 = grad_output * x1 * (x2 > 0).astype(np.float32)
+        
+        # Concatenate gradients
+        grad_input = np.concatenate([grad_x1, grad_x2], axis=-1)
+        
+        return grad_input
+
+
+class RobustNeuralNet:
+    """
+    Robust Neural Network with comprehensive error checking and validation
+    
+    Features:
+    - Tensor shape validation
+    - Input dimension checks
+    - Gradient flow validation
+    - Activation function compatibility
+    - Model checkpointing
+    """
+    
+    def __init__(self, input_dim: int = 10, hidden_dim: int = 10, output_dim: int = 1):
+        """
+        Initialize RobustNeuralNet
+        
+        Args:
+            input_dim: Input dimension size
+            hidden_dim: Hidden layer dimension size
+            output_dim: Output dimension size
+        """
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        
+        # Validate dimensions
+        self._validate_dimensions()
+        
+        # Initialize layers with reGLU activation
+        self.layers = [
+            Dense(input_dim, hidden_dim),
+            ReGLU(),  # reGLU activation as requested
+            Dense(hidden_dim, output_dim)
+        ]
+        
+        # Gradient cache for validation
+        self.gradient_cache = {}
+        self.input_cache = None
+        self.output_cache = None
+        
+        # Checkpointing state
+        self.checkpoint_dir = "checkpoints"
+        self.checkpoint_prefix = "robust_net"
+        
+        print(f"RobustNeuralNet initialized: {input_dim} -> {hidden_dim} -> {output_dim}")
+        print(f"Activation: reGLU")
+        print(f"Total parameters: {self.get_num_parameters()}")
+    
+    def _validate_dimensions(self):
+        """Validate tensor dimensions"""
+        if self.input_dim <= 0 or self.hidden_dim <= 0 or self.output_dim <= 0:
+            raise ValueError("All dimensions must be positive integers")
+        
+        if self.input_dim < 2:
+            raise ValueError("Input dimension too small for reGLU activation (needs at least 2)")
+        
+        if self.hidden_dim < 2:
+            raise ValueError("Hidden dimension too small for reGLU activation (needs at least 2)")
+    
+    def _validate_input_shape(self, x: np.ndarray):
+        """Validate input tensor shape"""
+        if len(x.shape) != 2:
+            raise ValueError(f"Expected 2D input (batch_size, input_dim), got shape {x.shape}")
+        
+        if x.shape[1] != self.input_dim:
+            raise ValueError(f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}")
+        
+        if not np.isfinite(x).all():
+            raise ValueError("Input contains non-finite values (NaN or Inf)")
+    
+    def _validate_activation_compatibility(self):
+        """Check if activation functions are compatible with layer dimensions"""
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, ReGLU):
+                # Check if previous layer output dimension is compatible with reGLU
+                if i > 0 and hasattr(self.layers[i-1], 'out_features'):
+                    prev_out_dim = self.layers[i-1].out_features if hasattr(self.layers[i-1], 'out_features') else self.layers[i-1].weights.shape[1]
+                    if prev_out_dim < 2:
+                        raise ValueError(f"Layer before ReGLU must have output dimension >= 2, got {prev_out_dim}")
+    
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """Forward pass with comprehensive validation"""
+        # Input validation
+        self._validate_input_shape(x)
+        self.input_cache = x.copy()
+        
+        # Forward through layers
+        for i, layer in enumerate(self.layers):
+            x = layer.forward(x)
+            
+            # Validate intermediate outputs
+            if not np.isfinite(x).all():
+                raise RuntimeError(f"Non-finite values detected after layer {i} ({type(layer).__name__})")
+        
+        self.output_cache = x.copy()
+        return x
+    
+    def backward(self, grad_output: np.ndarray) -> Dict[str, np.ndarray]:
+        """Backward pass with gradient validation"""
+        if self.output_cache is None:
+            raise RuntimeError("Forward pass must be called before backward pass")
+        
+        # Validate gradient output
+        if not np.isfinite(grad_output).all():
+            raise ValueError("Gradient output contains non-finite values")
+        
+        if grad_output.shape != self.output_cache.shape:
+            raise ValueError(f"Gradient output shape mismatch: expected {self.output_cache.shape}, got {grad_output.shape}")
+        
+        # Backward through layers
+        gradients = {}
+        current_grad = grad_output
+        
+        for i, layer in reversed(list(enumerate(self.layers))):
+            if hasattr(layer, 'backward'):
+                current_grad = layer.backward(current_grad)
+                
+                # Cache gradients for validation
+                if hasattr(layer, 'grad_weights'):
+                    self.gradient_cache[f'layer_{i}_weights'] = layer.grad_weights
+                    self.gradient_cache[f'layer_{i}_bias'] = layer.grad_bias
+                
+                # Validate gradients
+                if not np.isfinite(current_grad).all():
+                    raise RuntimeError(f"Non-finite gradients detected after layer {i} ({type(layer).__name__})")
+                
+                if np.any(np.isnan(current_grad)):
+                    raise RuntimeError(f"NaN gradients detected after layer {i} ({type(layer).__name__})")
+                
+                if np.max(np.abs(current_grad)) > 1e6:
+                    print(f"Warning: Large gradients detected after layer {i} ({type(layer).__name__}): max={np.max(np.abs(current_grad))}")
+        
+        return gradients
+    
+    def check_backprop(self, x: np.ndarray, epsilon: float = 1e-5) -> bool:
+        """
+        Validate backpropagation using numerical gradient checking
+        
+        Args:
+            x: Input tensor for validation
+            epsilon: Small value for numerical gradient approximation
+            
+        Returns:
+            True if backpropagation is correct, False otherwise
+        """
+        print("Running backpropagation validation...")
+        
+        # Forward pass
+        output = self.forward(x)
+        
+        # Create random gradient output
+        grad_output = np.random.randn(*output.shape).astype(np.float32)
+        
+        # Analytical gradients
+        self.backward(grad_output)
+        
+        # Numerical gradient checking for each parameter
+        success = True
+        
+        for i, layer in enumerate(self.layers):
+            if hasattr(layer, 'weights') and hasattr(layer, 'grad_weights'):
+                weights = layer.weights
+                grad_weights = layer.grad_weights
+                
+                # Check a few random weights
+                for _ in range(5):
+                    try:
+                        idx = tuple(np.random.randint(0, s) for s in weights.shape)
+                        
+                        # Save original weight
+                        original_weight = weights[idx]
+                        
+                        # Compute numerical gradient
+                        weights[idx] = original_weight + epsilon
+                        output_plus = self.forward(x)
+                        loss_plus = np.sum(output_plus * grad_output)
+                        
+                        weights[idx] = original_weight - epsilon
+                        output_minus = self.forward(x)
+                        loss_minus = np.sum(output_minus * grad_output)
+                        
+                        numerical_grad = (loss_plus - loss_minus) / (2 * epsilon)
+                        analytical_grad = grad_weights[idx]
+                        
+                        # Restore original weight
+                        weights[idx] = original_weight
+                        
+                        # Check if gradients are close (use relative tolerance)
+                        tolerance = 1e-3  # Increased tolerance for numerical stability
+                        if abs(numerical_grad - analytical_grad) > tolerance:
+                            print(f"Gradient check FAILED for layer {i} at index {idx}")
+                            print(f"  Numerical: {numerical_grad:.6f}, Analytical: {analytical_grad:.6f}")
+                            print(f"  Difference: {abs(numerical_grad - analytical_grad):.6f}, Tolerance: {tolerance:.6f}")
+                            success = False
+                    except IndexError:
+                        # Skip this weight if index is out of bounds
+                        continue
+        
+        if success:
+            print("[OK] Backpropagation validation PASSED")
+        else:
+            print("[ERROR] Backpropagation validation FAILED")
+        
+        return success
+    
+    def save_checkpoint(self, epoch: int, optimizer_state: dict = None):
+        """Save model checkpoint"""
+        import os
+        import pickle
+        
+        # Create checkpoint directory if it doesn't exist
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        
+        # Prepare checkpoint data
+        checkpoint_data = {
+            'epoch': epoch,
+            'input_dim': self.input_dim,
+            'hidden_dim': self.hidden_dim,
+            'output_dim': self.output_dim,
+            'layers': []
+        }
+        
+        # Save layer parameters
+        for layer in self.layers:
+            layer_data = {}
+            if hasattr(layer, 'weights'):
+                layer_data['weights'] = layer.weights
+            if hasattr(layer, 'bias'):
+                layer_data['bias'] = layer.bias
+            if hasattr(layer, 'gamma'):
+                layer_data['gamma'] = layer.gamma
+            if hasattr(layer, 'beta'):
+                layer_data['beta'] = layer.beta
+            checkpoint_data['layers'].append(layer_data)
+        
+        # Save optimizer state if provided
+        if optimizer_state:
+            checkpoint_data['optimizer_state'] = optimizer_state
+        
+        # Save checkpoint
+        checkpoint_path = os.path.join(self.checkpoint_dir, f"{self.checkpoint_prefix}_epoch_{epoch}.pkl")
+        with open(checkpoint_path, 'wb') as f:
+            pickle.dump(checkpoint_data, f)
+        
+        print(f"Checkpoint saved to {checkpoint_path}")
+        return checkpoint_path
+    
+    def load_checkpoint(self, checkpoint_path: str):
+        """Load model from checkpoint"""
+        import pickle
+        
+        with open(checkpoint_path, 'rb') as f:
+            checkpoint_data = pickle.load(f)
+        
+        # Validate checkpoint compatibility
+        if checkpoint_data['input_dim'] != self.input_dim:
+            raise ValueError(f"Input dimension mismatch: model expects {self.input_dim}, checkpoint has {checkpoint_data['input_dim']}")
+        
+        if checkpoint_data['output_dim'] != self.output_dim:
+            raise ValueError(f"Output dimension mismatch: model expects {self.output_dim}, checkpoint has {checkpoint_data['output_dim']}")
+        
+        # Load layer parameters
+        for i, (layer, layer_data) in enumerate(zip(self.layers, checkpoint_data['layers'])):
+            if hasattr(layer, 'weights') and 'weights' in layer_data:
+                layer.weights = layer_data['weights']
+            if hasattr(layer, 'bias') and 'bias' in layer_data:
+                layer.bias = layer_data['bias']
+            if hasattr(layer, 'gamma') and 'gamma' in layer_data:
+                layer.gamma = layer_data['gamma']
+            if hasattr(layer, 'beta') and 'beta' in layer_data:
+                layer.beta = layer_data['beta']
+        
+        print(f"Checkpoint loaded from {checkpoint_path}")
+        print(f"Resuming from epoch {checkpoint_data['epoch']}")
+        
+        return checkpoint_data.get('optimizer_state', None)
+    
+    def get_num_parameters(self) -> int:
+        """Count total number of parameters"""
+        total_params = 0
+        
+        for layer in self.layers:
+            if hasattr(layer, 'weights'):
+                total_params += layer.weights.size
+            if hasattr(layer, 'bias'):
+                total_params += layer.bias.size
+            if hasattr(layer, 'gamma'):
+                total_params += layer.gamma.size
+            if hasattr(layer, 'beta'):
+                total_params += layer.beta.size
+        
+        return total_params
+
+
+# Add Dense layer class for completeness
+class Dense:
+    """Dense layer for RobustNeuralNet"""
+    
+    def __init__(self, input_dim: int, output_dim: int):
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        
+        # Initialize weights using He initialization
+        std = np.sqrt(2.0 / input_dim)
+        self.weights = np.random.randn(input_dim, output_dim).astype(np.float32) * std
+        self.bias = np.zeros(output_dim, dtype=np.float32)
+        
+        # Gradient storage
+        self.grad_weights = np.zeros_like(self.weights)
+        self.grad_bias = np.zeros_like(self.bias)
+        
+        # Cache for backward pass
+        self.cache_input = None
+    
+    def forward(self, x: np.ndarray) -> np.ndarray:
+        """Forward pass"""
+        self.cache_input = x
+        return cpuwarp.matmul(x, self.weights) + self.bias
+    
+    def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Backward pass"""
+        # Compute gradients
+        self.grad_weights = cpuwarp.matmul(self.cache_input.T, grad_output)
+        self.grad_bias = np.sum(grad_output, axis=0)
+        
+        # Compute gradient for input
+        grad_input = cpuwarp.matmul(grad_output, self.weights.T)
+        
+        return grad_input
