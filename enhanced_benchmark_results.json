@@ -1,0 +1,134 @@
+{
+  "configuration": {
+    "vocab_size": 2000,
+    "batch_size": 4,
+    "seq_len": 32,
+    "d_model": 128,
+    "n_layers": 3,
+    "n_heads": 8,
+    "n_experts": 6
+  },
+  "performance": {
+    "total_time": 1.5850720405578613,
+    "avg_time_per_iteration": 0.10567146937052409,
+    "iterations_per_second": 9.46329227706319,
+    "memory_usage_mb": 147.80078125
+  },
+  "output_quality": {
+    "mean_logits": -0.0020611570216715336,
+    "std_logits": 0.3451877236366272,
+    "min_logits": -1.507155179977417,
+    "max_logits": 1.0872533321380615,
+    "entropy": 7.541291236877441,
+    "avg_confidence": 0.0013370283413678408,
+    "has_nan": false,
+    "has_inf": false,
+    "output_shape": [
+      60,
+      32,
+      2000
+    ]
+  },
+  "moe_metrics": {
+    "avg_lb_loss": 4.670918226242065,
+    "std_lb_loss": 0.0,
+    "min_lb_loss": 4.670918226242065,
+    "max_lb_loss": 4.670918226242065
+  },
+  "scalability": [
+    {
+      "config": {
+        "batch_size": 2,
+        "seq_len": 16,
+        "name": "small"
+      },
+      "avg_time": 0.008244180679321289,
+      "tokens_per_second": 3881.525799193721
+    },
+    {
+      "config": {
+        "batch_size": 4,
+        "seq_len": 32,
+        "name": "medium"
+      },
+      "avg_time": 0.02086300849914551,
+      "tokens_per_second": 6135.2608855641565
+    },
+    {
+      "config": {
+        "batch_size": 8,
+        "seq_len": 64,
+        "name": "large"
+      },
+      "avg_time": 0.07466135025024415,
+      "tokens_per_second": 6857.631134233683
+    }
+  ],
+  "robustness": {
+    "normal": {
+      "success": true,
+      "time": 0.0015184879302978516,
+      "has_nan": false,
+      "has_inf": false,
+      "output_shape": [
+        2,
+        16,
+        500
+      ],
+      "mean_logits": -0.008504233323037624,
+      "std_logits": 0.4921368360519409
+    },
+    "all_zeros": {
+      "success": true,
+      "time": 0.0012905597686767578,
+      "has_nan": false,
+      "has_inf": false,
+      "output_shape": [
+        2,
+        16,
+        500
+      ],
+      "mean_logits": -0.009310366585850716,
+      "std_logits": 0.49024689197540283
+    },
+    "all_ones": {
+      "success": true,
+      "time": 0.0012717247009277344,
+      "has_nan": false,
+      "has_inf": false,
+      "output_shape": [
+        2,
+        16,
+        500
+      ],
+      "mean_logits": -0.04134446009993553,
+      "std_logits": 0.47777259349823
+    },
+    "max_values": {
+      "success": true,
+      "time": 0.001230478286743164,
+      "has_nan": false,
+      "has_inf": false,
+      "output_shape": [
+        2,
+        16,
+        500
+      ],
+      "mean_logits": -0.030750727280974388,
+      "std_logits": 0.46818438172340393
+    },
+    "random_large": {
+      "success": true,
+      "time": 0.0024166107177734375,
+      "has_nan": false,
+      "has_inf": false,
+      "output_shape": [
+        4,
+        32,
+        500
+      ],
+      "mean_logits": -0.0212095994502306,
+      "std_logits": 0.4853596091270447
+    }
+  }
+}
