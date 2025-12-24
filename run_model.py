@@ -113,6 +113,9 @@ class ModelRunner:
                 # Fusion layer
                 self.fusion_layer = np.random.randn(1024, self.hidden_dim).astype(np.float32) * 0.1
                 self.output_layer = np.random.randn(self.hidden_dim, 1000).astype(np.float32) * 0.1
+                
+                # Initialize exporter attribute
+                self._exporter = None
             
             def forward(self, image, text):
                 # Encode image
@@ -143,6 +146,8 @@ class ModelRunner:
                 return 10000000  # Placeholder
         
         self.model = SimpleVLM(vlm_config)
+        # Add exporter attribute for consistency
+        self.model._exporter = None  # Will be set by enable_advanced_features
         logger.info("Multimodal VLM model created")
     
     def load_dataset(self, dataset_name: str = 'auto'):
@@ -329,7 +334,10 @@ class ModelRunner:
         logger.info(f"Benchmark Results:")
         logger.info(f"  Average Time: {avg_time:.4f}s")
         logger.info(f"  Throughput: {throughput:.1f} samples/sec")
-        logger.info(f"  Model Parameters: {self.model.get_num_parameters():,}")
+        if self.model is not None and hasattr(self.model, 'get_num_parameters'):
+            logger.info(f"  Model Parameters: {self.model.get_num_parameters():,}")
+        else:
+            logger.info(f"  Model Parameters: Unknown (model not initialized or missing method)")
     
     def save_model(self, path: str = None):
         """Save model weights"""
@@ -361,10 +369,13 @@ class ModelRunner:
             self.save_model()
         
         # Export model if configured
-        if hasattr(self.model, '_exporter'):
-            self.model._exporter.export_onnx()
-            self.model._exporter.export_torchscript()
-            self.model._exporter.export_quantized()
+        if hasattr(self.model, '_exporter') and self.model is not None:
+            try:
+                self.model._exporter.export_onnx()
+                self.model._exporter.export_torchscript()
+                self.model._exporter.export_quantized()
+            except Exception as e:
+                logger.warning(f"Model export failed: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description='CPUWARP-ML Model Runner')
