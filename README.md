@@ -1,5 +1,6 @@
 XTRAIN
 an powerful, easy CPU AI training framework
+<img width="273" height="100" alt="logo" src="https://github.com/user-attachments/assets/fb07aeb1-fdc2-4c46-954a-cd85aac062aa" />
 
 Overview
 XTRAIN is a compact, CPU-first machine learning training framework designed for efficiency, transparency, and ease of use. It provides a clean Python API and a lightweight native core (Rust/C/Assembly) for performance-critical paths. XTRAIN is built to let researchers and engineers train models on CPU-only machines without sacrificing throughput or control.
@@ -147,3 +148,4 @@ Iterate on model and batch settings locally, measure CPU utilization.
 Build native extensions and rerun benchmarks.
 Scale batch size using gradient accumulation before increasing model size.
 Record config + environment + checkpoints for reproducibility.
+
