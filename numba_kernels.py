@@ -124,6 +124,11 @@ if NUMBA_AVAILABLE:
         Returns:
             output_array: (batch, out_channels, out_height, out_width)
         """
+        if input_array.ndim == 2:
+            input_array = input_array.reshape(1, 1, input_array.shape[0], input_array.shape[1])
+        elif input_array.ndim == 3:
+            input_array = input_array.reshape(input_array.shape[0], 1, input_array.shape[1], input_array.shape[2])
+        
         batch_size, in_channels, in_h, in_w = input_array.shape
         out_channels, _, kernel_h, kernel_w = kernel_array.shape
         out_h = in_h - kernel_h + 1
