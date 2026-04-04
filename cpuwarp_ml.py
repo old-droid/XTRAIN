@@ -282,16 +282,26 @@ class OptimizedKernels:
 
     def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """Optimized matrix multiplication with Numba JIT priority"""
+        # Numba does not support float16, convert to float32
+        a_dtype = a.dtype
+        if a.dtype == np.float16:
+            a = a.astype(np.float32)
+        if b.dtype == np.float16:
+            b = b.astype(np.float32)
+
         # Priority 1: Numba JIT compilation (fastest for repeated calls)
         if NUMBA_AVAILABLE and a.ndim == 2 and b.ndim == 2:
-            return numba_matmul_2d(a, b)
+            result = numba_matmul_2d(a, b)
+            return result.astype(a_dtype) if a_dtype == np.float16 else result
 
         # Priority 2: Batched Numba (for 3D tensors)
         if NUMBA_AVAILABLE and a.ndim == 3 and b.ndim in (2, 3):
-            return numba_matmul_3d(a, b)
+            result = numba_matmul_3d(a, b)
+            return result.astype(a_dtype) if a_dtype == np.float16 else result
 
         # Fallback: NumPy
-        return self._numpy_matmul(a, b)
+        result = self._numpy_matmul(a, b)
+        return result.astype(a_dtype) if a_dtype == np.float16 else result
 
     def _numpy_matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """NumPy-based matrix multiplication with optimizations"""
