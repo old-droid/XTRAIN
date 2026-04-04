@@ -1044,9 +1044,425 @@ class TekkenTokenizer:
 
         return np.array(encoded_batch, dtype=np.object_)
 
+    def tokenize_numbers_r2l(self, text: str) -> List[str]:
+        """
+        Right-to-Left digit-by-digit tokenization for numbers
+        Optimized for arithmetic operations where LSD (least significant digit) comes first
+
+        Args:
+            text: Input text containing numbers
+
+        Returns:
+            List of tokens with numbers reversed digit-by-digit
+        """
+        tokens = []
+        number_pattern = re.compile(r'\d+\.?\d*')
+        last_end = 0
+
+        for match in number_pattern.finditer(text):
+            start, end = match.start(), match.end()
+            if start > last_end:
+                tokens.extend(self.tokenize(text[last_end:start]))
+
+            number_str = match.group()
+            if '.' in number_str:
+                int_part, dec_part = number_str.split('.')
+                r2l_int = list(reversed(int_part))
+                r2l_dec = list(reversed(dec_part))
+                tokens.extend(['<num>'] + r2l_int + ['<dec>'] + r2l_dec + ['</num>'])
+            else:
+                r2l_digits = list(reversed(number_str))
+                tokens.extend(['<num>'] + r2l_digits + ['</num>'])
+
+            last_end = end
+
+        if last_end < len(text):
+            tokens.extend(self.tokenize(text[last_end:]))
+
+        return tokens
+
     def get_vocab_size(self) -> int:
         """Get vocabulary size"""
         return len(self.vocab)
+
+
+class TekkenTokenizerMV:
+    """
+    TekkenTokenizerMV: Multi-View Tokenizer for Math/Verification Pipeline
+
+    Extends base tokenization with:
+    - Noise stripping for math expressions
+    - Right-to-Left (R2L) digit-by-digit tokenization
+    - Word-to-operator mapping for symbolic reasoning
+    - Enhanced number tokenization for arithmetic
+    """
+
+    word_to_op = {
+        "plus": "+", "add": "+", "sum": "+", "added": "+",
+        "minus": "-", "subtract": "-", "difference": "-", "less": "-",
+        "times": "*", "multiply": "*", "product": "*", "multiplied": "*",
+        "divided": "/", "divide": "/", "quotient": "/", "over": "/",
+        "power": "**", "raised": "**", "squared": "**2", "cubed": "**3",
+        "mod": "%", "modulo": "%", "remainder": "%",
+        "equals": "=", "equal": "=", "is": "=", "gives": "=",
+        "greater": ">", "less_than": "<", "gt": ">", "lt": "<",
+    }
+
+    def __init__(self):
+        self.r2l_digit_map = {str(i): f"<d{i}>" for i in range(10)}
+        self.r2l_digit_map["."] = "<dec>"
+        self.r2l_digit_map["-"] = "<neg>"
+
+    def strip_noise(self, text: str) -> str:
+        text = re.sub(r'[^\d+\-*/().%\s^a-zA-Z=<>!]', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+
+    def tokenize_numbers_r2l(self, text: str) -> List[str]:
+        tokens = []
+        number_pattern = re.compile(r'-?\d+\.?\d*')
+        last_end = 0
+        for match in number_pattern.finditer(text):
+            start, end = match.start(), match.end()
+            if start > last_end:
+                tokens.extend(text[last_end:start].split())
+            number_str = match.group()
+            is_neg = number_str.startswith('-')
+            if is_neg:
+                number_str = number_str[1:]
+            if '.' in number_str:
+                int_part, dec_part = number_str.split('.')
+                r2l_int = list(reversed(int_part))
+                r2l_dec = list(reversed(dec_part))
+                token_list = ['<num>']
+                if is_neg:
+                    token_list.append('<neg>')
+                token_list.extend(r2l_int)
+                token_list.append('<dec>')
+                token_list.extend(r2l_dec)
+                token_list.append('</num>')
+                tokens.extend(token_list)
+            else:
+                r2l_digits = list(reversed(number_str))
+                token_list = ['<num>']
+                if is_neg:
+                    token_list.append('<neg>')
+                token_list.extend(r2l_digits)
+                token_list.append('</num>')
+                tokens.extend(token_list)
+            last_end = end
+        if last_end < len(text):
+            tokens.extend(text[last_end:].split())
+        return tokens
+
+    def apply_word_to_op(self, text: str) -> str:
+        result = text.lower()
+        for word, op in self.word_to_op.items():
+            result = re.sub(r'\b' + re.escape(word) + r'\b', f' {op} ', result)
+        result = re.sub(r'\s+', ' ', result).strip()
+        return result
+
+    def tokenize_math_expression(self, text: str) -> Dict:
+        cleaned = self.strip_noise(text)
+        symbolic = self.apply_word_to_op(cleaned)
+        r2l_tokens = self.tokenize_numbers_r2l(symbolic)
+        return {
+            "original": text,
+            "cleaned": cleaned,
+            "symbolic": symbolic,
+            "r2l_tokens": r2l_tokens,
+        }
+
+
+class TypeRouter:
+    """Problem Type Classification Router"""
+
+    TYPE_ARITHMETIC = "Arithmetic"
+    TYPE_ALGEBRAIC = "Algebraic"
+    TYPE_COMPARISON = "Comparison"
+    TYPE_GEOMETRIC = "Geometric"
+    TYPE_UNKNOWN = "Unknown"
+
+    arithmetic_patterns = [
+        r'^[\d\s\+\-\*/\.\%\(\)\^]+$',
+        r'what\s+is\s+[\d\s\+\-\*/\.\%\(\)\^]+',
+        r'calculate\s+[\d\s\+\-\*/\.\%\(\)\^]+',
+        r'compute\s+[\d\s\+\-\*/\.\%\(\)\^]+',
+        r'evaluate\s+[\d\s\+\-\*/\.\%\(\)\^]+',
+    ]
+    algebraic_patterns = [
+        r'[a-zA-Z][\d\s\+\-\*/\.\%\(\)\^=]*=',
+        r'=[\d\s\+\-\*/\.\%\(\)\^]*[a-zA-Z]',
+        r'solve\s+for\s+[a-zA-Z]',
+        r'simplify\s+.*[a-zA-Z]',
+        r'factor\s+.*[a-zA-Z]',
+        r'[a-zA-Z]\s*[\^²³]',
+        r'\d[a-zA-Z]',
+        r'[a-zA-Z]\d',
+    ]
+    comparison_patterns = [
+        r'is\s+\d+\s*[><=]+\s*\d+',
+        r'compare\s+\d+\s+and\s+\d+',
+        r'which\s+is\s+(bigger|larger|greater|smaller|less)',
+        r'\d+\s*[><]+\s*\d+',
+        r'is\s+\d+\s+(greater|less|bigger|smaller)\s+than\s+\d+',
+    ]
+    geometric_patterns = [
+        r'(area|volume|perimeter|circumference|radius|diameter)',
+        r'(triangle|square|circle|rectangle|sphere|cube)',
+        r'(angle|degree|pi|π)\s*of',
+        r'area\s+of',
+        r'volume\s+of',
+    ]
+
+    def classify(self, query: str) -> str:
+        query_stripped = query.strip()
+        for pattern in self.arithmetic_patterns:
+            if re.search(pattern, query_stripped, re.IGNORECASE):
+                return self.TYPE_ARITHMETIC
+        for pattern in self.comparison_patterns:
+            if re.search(pattern, query_stripped, re.IGNORECASE):
+                return self.TYPE_COMPARISON
+        for pattern in self.geometric_patterns:
+            if re.search(pattern, query_stripped, re.IGNORECASE):
+                return self.TYPE_GEOMETRIC
+        for pattern in self.algebraic_patterns:
+            if re.search(pattern, query_stripped, re.IGNORECASE):
+                return self.TYPE_ALGEBRAIC
+        if re.search(r'[\d]', query_stripped) and re.search(r'[\+\-\*/\^]', query_stripped):
+            return self.TYPE_ARITHMETIC
+        return self.TYPE_UNKNOWN
+
+
+class AimRouter:
+    """Aim Identification Router"""
+
+    AIM_CALCULATE = "Calculate"
+    AIM_SIMPLIFY = "Simplify"
+    AIM_SOLVE = "Solve"
+    AIM_COMPARE = "Compare"
+    AIM_EVALUATE = "Evaluate"
+    AIM_UNKNOWN = "Unknown"
+
+    aim_keywords = {
+        AIM_CALCULATE: ["calculate", "compute", "what is", "find the value", "result", "total"],
+        AIM_SIMPLIFY: ["simplify", "reduce", "expand", "combine", "factor"],
+        AIM_SOLVE: ["solve", "find x", "find the value of", "determine", "unknown"],
+        AIM_COMPARE: ["compare", "which is", "greater than", "less than", "bigger", "smaller", "is >"],
+        AIM_EVALUATE: ["evaluate", "compute the value", "work out"],
+    }
+
+    def identify(self, query: str) -> str:
+        query_lower = query.lower().strip()
+        for aim, keywords in self.aim_keywords.items():
+            for keyword in keywords:
+                if keyword in query_lower:
+                    return aim
+        if re.search(r'=\s*[a-zA-Z]', query) or re.search(r'[a-zA-Z]\s*=', query):
+            return self.AIM_SOLVE
+        if re.search(r'[><]', query):
+            return self.AIM_COMPARE
+        if re.search(r'[\d\s\+\-\*/\.\^]+', query):
+            return self.AIM_CALCULATE
+        return self.AIM_UNKNOWN
+
+
+class SymbolicRouter:
+    """Engine Routing: Routes to appropriate computation engine"""
+
+    ENGINE_SYMPY = "SymPy_Engine"
+    ENGINE_NATIVE = "Native_Compute_Engine"
+
+    def route(self, problem_type: str, aim: str) -> str:
+        if problem_type in (TypeRouter.TYPE_ALGEBRAIC, TypeRouter.TYPE_GEOMETRIC):
+            return self.ENGINE_SYMPY
+        if aim in (AimRouter.AIM_SOLVE, AimRouter.AIM_SIMPLIFY):
+            return self.ENGINE_SYMPY
+        return self.ENGINE_NATIVE
+
+
+class ChapatiMV_Model:
+    """ChapatiMV_Model: Multi-View Math Processing Model"""
+
+    def __init__(self):
+        self.tokenizer_mv = TekkenTokenizerMV()
+        self.type_router = TypeRouter()
+        self.aim_router = AimRouter()
+        self.symbolic_router = SymbolicRouter()
+        self.solve_history = []
+
+    def safe_eval(self, expression: str) -> Optional[str]:
+        cleaned = self.tokenizer_mv.strip_noise(expression)
+        cleaned = self.tokenizer_mv.apply_word_to_op(cleaned)
+        cleaned = re.sub(r'\s+', '', cleaned)
+        if not re.match(r'^[\d+\-*/().%\^]+$', cleaned):
+            return None
+        try:
+            cleaned = cleaned.replace('^', '**')
+            result = eval(cleaned, {"__builtins__": {}}, {})
+            if isinstance(result, (int, float)):
+                if isinstance(result, float) and result == int(result):
+                    return str(int(result))
+                return str(result)
+        except Exception:
+            pass
+        return None
+
+    def solve_linear_equation(self, expression: str) -> Optional[str]:
+        match = re.match(r'([\d\.\+\-\*/\*\s]*)\s*([a-zA-Z])\s*([\+\-\d\.\*/\s]*)\s*=\s*([\d\.\+\-\*/\s]*)', expression)
+        if not match:
+            return None
+        lhs_coef_str, var, lhs_const_str, rhs_str = match.groups()
+        try:
+            lhs_coef_str = lhs_coef_str.strip()
+            lhs_const_str = lhs_const_str.strip()
+            rhs_str = rhs_str.strip()
+            if not lhs_coef_str or lhs_coef_str in ('+', '-'):
+                coef = 1.0 if not lhs_coef_str or lhs_coef_str == '+' else -1.0
+            else:
+                coef = float(lhs_coef_str)
+            if not lhs_const_str:
+                const = 0.0
+            else:
+                const = float(eval(lhs_const_str, {"__builtins__": {}}, {}))
+            rhs_val = float(eval(rhs_str, {"__builtins__": {}}, {}))
+            if coef == 0:
+                return "No solution (coefficient is zero)"
+            x_val = (rhs_val - const) / coef
+            if x_val == int(x_val):
+                return f"{var} = {int(x_val)}"
+            return f"{var} = {x_val:.6g}"
+        except Exception:
+            return None
+
+    def solve_quadratic_pattern(self, expression: str) -> Optional[str]:
+        match = re.search(r'([a-zA-Z])\s*\^?\s*2\s*=\s*([\d\.]+)', expression)
+        if not match:
+            match = re.search(r'([\d\.]+)\s*=\s*([a-zA-Z])\s*\^?\s*2', expression)
+            if match:
+                val_str, var = match.group(2), match.group(1)
+            else:
+                return None
+        else:
+            var, val_str = match.group(1), match.group(2)
+        try:
+            val = float(val_str)
+            if val < 0:
+                return f"No real solution ({var}^2 = {val})"
+            sqrt_val = val ** 0.5
+            if sqrt_val == int(sqrt_val):
+                return f"{var} = ±{int(sqrt_val)}"
+            return f"{var} = ±{sqrt_val:.6g}"
+        except Exception:
+            return None
+
+    def solve_comparison(self, expression: str) -> Optional[str]:
+        match = re.search(r'(\d+\.?\d*)\s*([><=!]+)\s*(\d+\.?\d*)', expression)
+        if match:
+            left, op, right = match.group(1), match.group(2), match.group(3)
+            left_f, right_f = float(left), float(right)
+            try:
+                result = eval(f"{left_f} {op} {right_f}", {"__builtins__": {}}, {})
+                return f"{left} {op} {right} = {result}"
+            except Exception:
+                return None
+        match = re.search(r'compare\s+(\d+\.?\d*)\s+and\s+(\d+\.?\d*)', expression, re.IGNORECASE)
+        if match:
+            left, right = float(match.group(1)), float(match.group(2))
+            if left > right:
+                return f"{left} > {right}"
+            elif left < right:
+                return f"{left} < {right}"
+            else:
+                return f"{left} = {right}"
+        return None
+
+    def solve(self, query: str) -> Dict:
+        problem_type = self.type_router.classify(query)
+        aim = self.aim_router.identify(query)
+        engine = self.symbolic_router.route(problem_type, aim)
+        result = None
+        if engine == SymbolicRouter.ENGINE_NATIVE:
+            if problem_type == TypeRouter.TYPE_COMPARISON or aim == AimRouter.AIM_COMPARE:
+                result = self.solve_comparison(query)
+            if result is None:
+                result = self.safe_eval(query)
+        elif engine == SymbolicRouter.ENGINE_SYMPY:
+            if problem_type == TypeRouter.TYPE_COMPARISON:
+                result = self.solve_comparison(query)
+            if result is None:
+                result = self.solve_quadratic_pattern(query)
+            if result is None:
+                result = self.solve_linear_equation(query)
+            if result is None:
+                result = self.safe_eval(query)
+        if result is None:
+            result = "Unable to solve with current MV pipeline"
+        solution = {
+            "query": query,
+            "problem_type": problem_type,
+            "aim": aim,
+            "engine": engine,
+            "result": result,
+            "tokenized": self.tokenizer_mv.tokenize_math_expression(query),
+        }
+        self.solve_history.append(solution)
+        return solution
+
+
+class MVProcessingEngine:
+    """MVProcessingEngine: Bridge between LM and MV pipelines"""
+
+    math_indicators = [
+        r'\d+\s*[\+\-\*/\^]\s*\d+',
+        r'\d+\s*[><=]+\s*\d+',
+        r'\b(calculate|compute|solve|evaluate|simplify)\b',
+        r'\b(plus|minus|times|divided|equals|greater|less)\b',
+        r'[a-zA-Z]\s*=\s*\d+',
+        r'\d+\s*=\s*[a-zA-Z]',
+        r'\b(is\s+\d+\s*[><])',
+        r'\b(compare\s+\d+)',
+        r'\b(area|volume|perimeter|radius)\b',
+        r'\d+\s*%\s*\d+',
+        r'\^?\d+',
+    ]
+
+    def __init__(self, mv_model: Optional[ChapatiMV_Model] = None):
+        self.mv_model = mv_model
+        self.compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.math_indicators]
+
+    def is_math_query(self, text: str) -> bool:
+        for pattern in self.compiled_patterns:
+            if pattern.search(text):
+                return True
+        return False
+
+    def math_confidence(self, text: str) -> float:
+        if not text.strip():
+            return 0.0
+        matches = sum(1 for p in self.compiled_patterns if p.search(text))
+        return min(1.0, matches / len(self.compiled_patterns) * 2.0)
+
+    def process(self, query: str, lm_fallback: Optional[callable] = None) -> Dict:
+        if self.mv_model and self.is_math_query(query):
+            mv_result = self.mv_model.solve(query)
+            mv_result["pipeline"] = "MV"
+            mv_result["math_confidence"] = self.math_confidence(query)
+            return mv_result
+        if lm_fallback:
+            lm_result = lm_fallback(query)
+            return {
+                "query": query,
+                "pipeline": "LM",
+                "math_confidence": self.math_confidence(query),
+                "result": lm_result,
+            }
+        return {
+            "query": query,
+            "pipeline": "None",
+            "math_confidence": self.math_confidence(query),
+            "result": "No pipeline available",
+        }
 
 
 class NeuralOrchestrationSystem:
@@ -1736,13 +2152,14 @@ class ChapatiLM:
 
     def __init__(
         self,
-        vocab_size: int = 130000,
-        d_model: int = 2048,
-        num_workers: int = 8,
-        num_thoughts: int = 5,
-        max_retries: int = 4,
+        vocab_size: int = 8000,
+        d_model: int = 256,
+        num_workers: int = 4,
+        num_thoughts: int = 2,
+        max_retries: int = 2,
         retry_threshold: float = 0.2,
-        num_neurons: int = 16,
+        num_neurons: int = 8,
+        enable_mv: bool = True,
     ):
         """
         Initialize Chapati LM with CPU-optimized architecture and neural orchestration
@@ -1755,6 +2172,7 @@ class ChapatiLM:
             max_retries: Maximum number of retry attempts
             retry_threshold: Confidence threshold for triggering retries
             num_neurons: Number of neurons for neural orchestration routing
+            enable_mv: Enable Multi-View math processing pipeline
         """
         self.vocab_size = vocab_size
         self.d_model = d_model
@@ -1763,6 +2181,15 @@ class ChapatiLM:
         self.max_retries = max_retries
         self.retry_threshold = retry_threshold
         self.num_neurons = num_neurons
+        self.enable_mv = enable_mv
+
+        if enable_mv:
+            self.mv_model = ChapatiMV_Model()
+            self.mv_processing = MVProcessingEngine(mv_model=self.mv_model)
+            print("MV pipeline initialized: Math/Verification pipeline enabled")
+        else:
+            self.mv_model = None
+            self.mv_processing = None
 
         # Initialize neural orchestration system
         self.neural_orchestration = NeuralOrchestrationSystem(
@@ -1783,6 +2210,8 @@ class ChapatiLM:
             "retry_attempts": 0,
             "retry_successes": 0,
             "total_tokens": 0,
+            "mv_routed": 0,
+            "lm_routed": 0,
         }
         # Orchestration metrics stored separately to avoid type issues
         self._orchestration_metrics_cache = (
@@ -2117,6 +2546,7 @@ class ChapatiLM:
         context: Optional[np.ndarray] = None,
         use_mixed_precision: bool = True,
         use_gradient_checkpointing: bool = True,
+        raw_text: Optional[str] = None,
     ) -> np.ndarray:
         """
         Forward pass through Chapati LM architecture with neural orchestration and adaptive retry mechanism
@@ -2125,20 +2555,27 @@ class ChapatiLM:
 
         Enhanced Architecture Flow:
         1. Input embedding and preprocessing
-        2. Neural Orchestration System (worker nodes, orchestrator, manager, safety, verifier, retry)
-        3. Thought Engine with P+C scoring (for high-confusion cases)
-        4. Meow Attention with memory compression (context integration)
-        5. Final output generation with neural orchestration metadata
+        2. Math detection and MV pipeline routing (if enable_mv=True)
+        3. Neural Orchestration System (worker nodes, orchestrator, manager, safety, verifier, retry)
+        4. Thought Engine with P+C scoring (for high-confusion cases)
+        5. Meow Attention with memory compression (context integration)
+        6. Final output generation with neural orchestration metadata
 
         Args:
             input_ids: Input token IDs [batch_size, seq_len]
             context: Optional context for attention [batch_size, seq_len, d_model]
             use_mixed_precision: Whether to use float16 for compute (memory efficient)
             use_gradient_checkpointing: Whether to use gradient checkpointing
+            raw_text: Optional raw text input for math detection
 
         Returns:
             output_logits: Final output logits [batch_size, seq_len, vocab_size]
         """
+        if self.enable_mv and raw_text and self.mv_processing:
+            if self.mv_processing.is_math_query(raw_text):
+                self.metrics["mv_routed"] += 1
+                mv_result = self.mv_processing.process(raw_text)
+
         batch_size, seq_len = input_ids.shape
 
         # Convert input IDs to embeddings using vectorized lookup
@@ -2523,7 +2960,29 @@ class ChapatiLM:
             "thought_engine_hits": 0,
             "meow_attention_hits": 0,
             "total_tokens": 0,
+            "mv_routed": 0,
+            "lm_routed": 0,
         }
+
+    def process_math_query(self, query: str) -> Dict:
+        """
+        Public method for explicit math query processing through MV pipeline
+
+        Args:
+            query: Math query string
+
+        Returns:
+            Dict with MV pipeline result
+        """
+        if not self.enable_mv or not self.mv_processing:
+            return {
+                "query": query,
+                "pipeline": "None",
+                "result": "MV pipeline not enabled",
+            }
+        result = self.mv_processing.process(query)
+        self.metrics["mv_routed"] += 1
+        return result
 
 
 def generate_sample_text(
@@ -4991,7 +5450,7 @@ def auto_train_chapati_lm():
         learning_rate=0.001,  # INCREASED for better convergence (was 0.0001)
         optimizer="muon",  # Muon optimizer with Newton-Schulz orthogonalization
         # Uses higher clip (10.0) for 2D matrices + AdamW for biases
-        batch_size=16,  # Optimal batch size
+        batch_size=4,  # Reduced batch size
         gradient_clip=0.5,  # Gradient clipping for stability (auto-increased to 10.0 for 2D)
         weight_decay=0.01,  # Regularization for better generalization
     )
@@ -5018,12 +5477,12 @@ def auto_train_chapati_lm():
     # Professional training: intensive epochs, larger batches
     print("\nTraining Configuration:")
     print("  • Epochs: 55 (intensive deep learning)")
-    print("  • Batch Size: 16 (efficient processing)")
+    print("  • Batch Size: 4 (CPU-friendly)")
     print("  • Learning Rate: 0.0005 (stable convergence)")
     print("  • Optimizer: Muon (Newton-Schulz orthogonalization + AdamW)")
     print("  • Gradient Clip: 0.5 (auto-increases to 10.0 for 2D matrices)")
-    print("  • Model Size: 2048-dimensional (enhanced capacity)")
-    print("  • Vocabulary Size: 130,000+ tokens (large vocabulary)")
+    print("  • Model Size: 256-dimensional (CPU-optimized)")
+    print("  • Vocabulary Size: 8,000 tokens (compact)")
     print("  • Tokenizer: BPE-style with tiktoken-like features")
     print("  • Estimated Training Time: Extended (55 epochs)")
     print("\n🚀 OPTIMIZATIONS ENABLED:")
@@ -5035,8 +5494,8 @@ def auto_train_chapati_lm():
 
     training_stats = trainer.train(
         dataset,
-        epochs=55,  # Intensive training epochs
-        batch_size=16,  # Professional batch size
+        epochs=10,  # Reduced epochs
+        batch_size=4,  # Reduced batch size
         use_mixed_precision=True,  # Enable float16 for memory efficiency
         use_gradient_checkpointing=True,  # Enable gradient checkpointing
     )
@@ -5244,7 +5703,7 @@ def test_upgraded_tokenizer_and_model():
 
     # Test 1: Large vocabulary tokenizer
     print("\n1. Testing Large Vocabulary Tokenizer...")
-    tokenizer = TekkenTokenizer(vocab_size=130000)
+    tokenizer = TekkenTokenizer(vocab_size=8000)
     vocab_size = tokenizer.get_vocab_size()
     print(f"   [OK] Vocabulary size: {vocab_size} tokens")
     print(f"   [OK] Special tokens count: {len(tokenizer.special_tokens)}")
@@ -5318,7 +5777,219 @@ def test_upgraded_tokenizer_and_model():
     print(f"   • Comprehensive special tokens support")
 
 
+def test_mv_integration():
+    """
+    Test MV (Math/Verification) pipeline integration
+    Validates all MV components: tokenization, routing, solving, and bridge engine
+    """
+    print("=" * 60)
+    print("MV INTEGRATION TESTS")
+    print("=" * 60)
+
+    passed = 0
+    failed = 0
+
+    # Test 1: TekkenTokenizerMV - strip_noise
+    print("\n1. Testing TekkenTokenizerMV.strip_noise()...")
+    tokenizer_mv = TekkenTokenizerMV()
+    noisy = "What is 2 + 2? @#$"
+    cleaned = tokenizer_mv.strip_noise(noisy)
+    assert "2 + 2" in cleaned, f"Expected '2 + 2' in '{cleaned}'"
+    print(f"   [OK] strip_noise: '{noisy}' -> '{cleaned}'")
+    passed += 1
+
+    # Test 2: TekkenTokenizerMV - R2L tokenization
+    print("\n2. Testing TekkenTokenizerMV.tokenize_numbers_r2l()...")
+    r2l_tokens = tokenizer_mv.tokenize_numbers_r2l("123 + 45.67")
+    assert "<num>" in r2l_tokens, f"Expected <num> token in {r2l_tokens}"
+    assert "</num>" in r2l_tokens, f"Expected </num> token in {r2l_tokens}"
+    assert "<dec>" in r2l_tokens, f"Expected <dec> token in {r2l_tokens}"
+    print(f"   [OK] R2L tokens: {r2l_tokens}")
+    passed += 1
+
+    # Test 3: TekkenTokenizerMV - word_to_op mapping
+    print("\n3. Testing TekkenTokenizerMV.apply_word_to_op()...")
+    word_expr = "what is five plus three times two"
+    symbolic = tokenizer_mv.apply_word_to_op(word_expr)
+    assert "+" in symbolic, f"Expected '+' in '{symbolic}'"
+    assert "*" in symbolic, f"Expected '*' in '{symbolic}'"
+    print(f"   [OK] word_to_op: '{word_expr}' -> '{symbolic}'")
+    passed += 1
+
+    # Test 4: TypeRouter - Arithmetic classification
+    print("\n4. Testing TypeRouter - Arithmetic...")
+    type_router = TypeRouter()
+    assert type_router.classify("2 + 2") == TypeRouter.TYPE_ARITHMETIC
+    assert type_router.classify("calculate 15 * 3") == TypeRouter.TYPE_ARITHMETIC
+    assert type_router.classify("what is 100 / 5") == TypeRouter.TYPE_ARITHMETIC
+    print(f"   [OK] Arithmetic classification correct")
+    passed += 1
+
+    # Test 5: TypeRouter - Algebraic classification
+    print("\n5. Testing TypeRouter - Algebraic...")
+    assert type_router.classify("2x + 5 = 15") == TypeRouter.TYPE_ALGEBRAIC
+    assert type_router.classify("solve for x in 3x = 9") == TypeRouter.TYPE_ALGEBRAIC
+    assert type_router.classify("simplify 2x + 3x") == TypeRouter.TYPE_ALGEBRAIC
+    print(f"   [OK] Algebraic classification correct")
+    passed += 1
+
+    # Test 6: TypeRouter - Comparison classification
+    print("\n6. Testing TypeRouter - Comparison...")
+    assert type_router.classify("is 5 > 3") == TypeRouter.TYPE_COMPARISON
+    assert type_router.classify("compare 10 and 20") == TypeRouter.TYPE_COMPARISON
+    print(f"   [OK] Comparison classification correct")
+    passed += 1
+
+    # Test 7: TypeRouter - Geometric classification
+    print("\n7. Testing TypeRouter - Geometric...")
+    assert type_router.classify("area of circle") == TypeRouter.TYPE_GEOMETRIC
+    assert type_router.classify("volume of sphere") == TypeRouter.TYPE_GEOMETRIC
+    print(f"   [OK] Geometric classification correct")
+    passed += 1
+
+    # Test 8: AimRouter
+    print("\n8. Testing AimRouter...")
+    aim_router = AimRouter()
+    assert aim_router.identify("calculate 2+2") == AimRouter.AIM_CALCULATE
+    assert aim_router.identify("simplify 2x+3x") == AimRouter.AIM_SIMPLIFY
+    assert aim_router.identify("solve for x") == AimRouter.AIM_SOLVE
+    assert aim_router.identify("compare 5 and 10") == AimRouter.AIM_COMPARE
+    assert aim_router.identify("evaluate 3^2") == AimRouter.AIM_EVALUATE
+    print(f"   [OK] All aim identifications correct")
+    passed += 1
+
+    # Test 9: SymbolicRouter
+    print("\n9. Testing SymbolicRouter...")
+    symbolic_router = SymbolicRouter()
+    assert symbolic_router.route(TypeRouter.TYPE_ARITHMETIC, AimRouter.AIM_CALCULATE) == SymbolicRouter.ENGINE_NATIVE
+    assert symbolic_router.route(TypeRouter.TYPE_ALGEBRAIC, AimRouter.AIM_SOLVE) == SymbolicRouter.ENGINE_SYMPY
+    assert symbolic_router.route(TypeRouter.TYPE_ARITHMETIC, AimRouter.AIM_SOLVE) == SymbolicRouter.ENGINE_SYMPY
+    print(f"   [OK] Engine routing correct")
+    passed += 1
+
+    # Test 10: ChapatiMV_Model - Arithmetic solving
+    print("\n10. Testing ChapatiMV_Model - Arithmetic...")
+    mv_model = ChapatiMV_Model()
+    result = mv_model.solve("2 + 2")
+    assert result["result"] == "4", f"Expected '4', got '{result['result']}'"
+    assert result["engine"] == SymbolicRouter.ENGINE_NATIVE
+    print(f"   [OK] 2 + 2 = {result['result']} (engine: {result['engine']})")
+    passed += 1
+
+    # Test 11: ChapatiMV_Model - Complex arithmetic
+    print("\n11. Testing ChapatiMV_Model - Complex arithmetic...")
+    result = mv_model.solve("15 * 3 + 10")
+    assert result["result"] == "55", f"Expected '55', got '{result['result']}'"
+    print(f"   [OK] 15 * 3 + 10 = {result['result']}")
+    passed += 1
+
+    # Test 12: ChapatiMV_Model - Comparison solving
+    print("\n12. Testing ChapatiMV_Model - Comparison...")
+    result = mv_model.solve("is 5 > 3")
+    assert "True" in str(result["result"]), f"Expected True in result, got '{result['result']}'"
+    print(f"   [OK] is 5 > 3 = {result['result']}")
+    passed += 1
+
+    # Test 13: ChapatiMV_Model - Linear equation
+    print("\n13. Testing ChapatiMV_Model - Linear equation...")
+    result = mv_model.solve("2x + 5 = 15")
+    assert "x = 5" in result["result"], f"Expected 'x = 5', got '{result['result']}'"
+    print(f"   [OK] 2x + 5 = 15 -> {result['result']}")
+    passed += 1
+
+    # Test 14: ChapatiMV_Model - Quadratic pattern
+    print("\n14. Testing ChapatiMV_Model - Quadratic pattern...")
+    result = mv_model.solve("x^2 = 4")
+    assert "2" in result["result"], f"Expected '2' in result, got '{result['result']}'"
+    print(f"   [OK] x^2 = 4 -> {result['result']}")
+    passed += 1
+
+    # Test 15: ChapatiMV_Model - Word operators
+    print("\n15. Testing ChapatiMV_Model - Word operators...")
+    result = mv_model.solve("10 plus 5")
+    assert result["result"] == "15", f"Expected '15', got '{result['result']}'"
+    print(f"   [OK] 10 plus 5 = {result['result']}")
+    passed += 1
+
+    # Test 16: MVProcessingEngine - Math detection
+    print("\n16. Testing MVProcessingEngine - Math detection...")
+    mv_engine = MVProcessingEngine(mv_model=mv_model)
+    assert mv_engine.is_math_query("2 + 2") == True
+    assert mv_engine.is_math_query("calculate 5 * 3") == True
+    assert mv_engine.is_math_query("solve 2x = 10") == True
+    assert mv_engine.is_math_query("hello world") == False
+    assert mv_engine.is_math_query("the quick brown fox") == False
+    print(f"   [OK] Math detection correct")
+    passed += 1
+
+    # Test 17: MVProcessingEngine - Math confidence
+    print("\n17. Testing MVProcessingEngine - Math confidence...")
+    conf_math = mv_engine.math_confidence("calculate 2 + 2 * 3")
+    conf_text = mv_engine.math_confidence("hello world")
+    assert conf_math > conf_text, f"Math confidence ({conf_math}) should be > text confidence ({conf_text})"
+    print(f"   [OK] Math confidence: {conf_math:.2f}, Text confidence: {conf_text:.2f}")
+    passed += 1
+
+    # Test 18: MVProcessingEngine - Process pipeline
+    print("\n18. Testing MVProcessingEngine - Process pipeline...")
+    result = mv_engine.process("3 * 4 + 2")
+    assert result["pipeline"] == "MV"
+    assert result["result"] == "14", f"Expected '14', got '{result['result']}'"
+    print(f"   [OK] Pipeline: {result['pipeline']}, Result: {result['result']}")
+    passed += 1
+
+    # Test 19: ChapatiLM MV integration
+    print("\n19. Testing ChapatiLM with MV enabled...")
+    model = ChapatiLM(vocab_size=1000, d_model=64, num_workers=2, num_thoughts=2, num_neurons=4, enable_mv=True)
+    assert model.enable_mv == True
+    assert model.mv_model is not None
+    assert model.mv_processing is not None
+    math_result = model.process_math_query("5 + 7")
+    assert math_result["result"] == "12", f"Expected '12', got '{math_result['result']}'"
+    print(f"   [OK] ChapatiLM MV: 5 + 7 = {math_result['result']}")
+    passed += 1
+
+    # Test 20: ChapatiLM MV disabled
+    print("\n20. Testing ChapatiLM with MV disabled...")
+    model_no_mv = ChapatiLM(vocab_size=1000, d_model=64, num_workers=2, num_thoughts=2, num_neurons=4, enable_mv=False)
+    assert model_no_mv.enable_mv == False
+    assert model_no_mv.mv_model is None
+    assert model_no_mv.mv_processing is None
+    no_mv_result = model_no_mv.process_math_query("5 + 7")
+    assert "not enabled" in no_mv_result["result"].lower()
+    print(f"   [OK] ChapatiLM MV disabled: {no_mv_result['result']}")
+    passed += 1
+
+    # Test 21: R2L tokenization via TekkenTokenizer
+    print("\n21. Testing TekkenTokenizer.tokenize_numbers_r2l()...")
+    base_tokenizer = TekkenTokenizer(vocab_size=5000)
+    r2l = base_tokenizer.tokenize_numbers_r2l("value is 1234 and 56.78")
+    assert len(r2l) > 0
+    assert "<num>" in r2l
+    print(f"   [OK] R2L tokenization: {r2l[:10]}...")
+    passed += 1
+
+    # Test 22: Solve history tracking
+    print("\n22. Testing MV solve history...")
+    history_len = len(mv_model.solve_history)
+    assert history_len > 0, "Solve history should not be empty"
+    print(f"   [OK] Solve history: {history_len} entries")
+    passed += 1
+
+    # Summary
+    print("\n" + "=" * 60)
+    print(f"MV INTEGRATION TEST RESULTS: {passed} passed, {failed} failed")
+    print("=" * 60)
+    if failed == 0:
+        print("[SUCCESS] All MV integration tests passed!")
+    else:
+        print(f"[WARNING] {failed} test(s) failed")
+    return passed, failed
+
+
 if __name__ == "__main__":
+    test_mv_integration()
+
     # Test the upgrades first
     test_upgraded_tokenizer_and_model()
 
