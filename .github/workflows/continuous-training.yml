@@ -1,0 +1,107 @@
+name: Continuous Model Training
+
+on:
+  workflow_dispatch:
+    inputs:
+      epochs:
+        description: "Epochs per run"
+        required: false
+        default: "5"
+      lr:
+        description: "Learning rate"
+        required: false
+        default: "0.01"
+  schedule:
+    - cron: "0 */12 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Find project directory
+        id: find-project
+        run: |
+          echo "=== Directory structure ==="
+          ls -la
+          echo ""
+
+          PROJECT_DIR=""
+          if [ -f "chapati_mv_final.py" ]; then
+            PROJECT_DIR="."
+          elif [ -d "XTRAIN" ] && [ -f "XTRAIN/chapati_mv_final.py" ]; then
+            PROJECT_DIR="XTRAIN"
+          else
+            FOUND=$(find . -name "chapati_mv_final.py" -type f 2>/dev/null | head -1)
+            if [ -n "$FOUND" ]; then
+              PROJECT_DIR=$(dirname "$FOUND")
+              PROJECT_DIR=${PROJECT_DIR#./}
+            fi
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: chapati_mv_final.py not found!"
+            echo "Full tree:"
+            find . -type f | head -50
+            exit 1
+          fi
+
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "Found project in: $PROJECT_DIR"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy psutil py-cpuinfo numba
+
+      - name: Restore checkpoint info
+        id: checkpoint
+        run: |
+          STATE_FILE="${{ steps.find-project.outputs.project_dir }}/checkpoints/training_state.json"
+          if [ -f "$STATE_FILE" ]; then
+            EPOCH=$(python3 -c "import json; print(json.load(open('$STATE_FILE')).get('total_epochs', 0))")
+            echo "current_epoch=$EPOCH" >> $GITHUB_OUTPUT
+            echo "Resuming from epoch $EPOCH"
+          else
+            echo "current_epoch=0" >> $GITHUB_OUTPUT
+            echo "Starting fresh training"
+          fi
+
+      - name: Run training (auto-resumes from checkpoint)
+        run: |
+          cd ${{ steps.find-project.outputs.project_dir }}
+          python3 chapati_mv_final.py
+
+      - name: Commit checkpoint weights
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ steps.find-project.outputs.project_dir }}/checkpoints/"
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "🧠 Training checkpoint: epoch $(python3 -c "import json; print(json.load(open('${{ steps.find-project.outputs.project_dir }}/checkpoints/training_state.json'))['total_epochs'])") [run ${{ github.run_number }}]"
+          git push
+
+      - name: Trigger next training run
+        if: always()
+        run: |
+          sleep 30
+          gh workflow run continuous-training.yml \
+            --ref ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
