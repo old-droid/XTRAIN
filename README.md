@@ -88,8 +88,6 @@ ChapatiLMV is our flagship Domain-Specific Expert model, designed to improve mat
 ### Future Roadmap:
 Transitioning from Rule-Based Symbolic Routers to Lightweight Neural Intent Classifiers (MLPs) for complex reasoning.
 
-### Advanced Usage
-For advanced use cases, refer to the docs directory for detailed examples and performance tuning tips.
 
 ### Performance Optimization
 To optimize the performance of your model training, consider the following strategies:
