@@ -1,4 +1,4 @@
-# XTRAIN:- A powerful, easy CPU AI training framework
+# chapatiLMV-XTRAIN:- A powerful, easy CPU AI training framework
 
 <img width="273" height="100" alt="logo" src="https://github.com/user-attachments/assets/fb07aeb1-fdc2-4c46-954a-cd85aac062aa" />
 
