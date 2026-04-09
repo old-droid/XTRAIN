@@ -56,7 +56,7 @@ model.train(data, parallel=True, advanced=True)
 ```
 
 ## Architecture
-XTRAIN follows a modular reasoning-based architecture:
+ChapatiLMV follows a modular reasoning-based architecture:
 
 - **Input Layer**: Accepts raw user queries or datasets.
 - **Task Classifier (Symbolic Router)**: Determines the type of problem (Arithmetic, Algebra, Geometry).
