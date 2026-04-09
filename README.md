@@ -1,4 +1,4 @@
-# chapatiLMV-XTRAIN:- A powerful, easy CPU AI training framework
+# chapatiLMV-XTRAIN:- An efficient, niche model made specifically for mathematicical solutions.
 
 <img width="273" height="100" alt="logo" src="https://github.com/user-attachments/assets/fb07aeb1-fdc2-4c46-954a-cd85aac062aa" />
 
