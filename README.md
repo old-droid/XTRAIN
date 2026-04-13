@@ -1,9 +1,29 @@
-XTRAIN
-an powerful, easy CPU AI training framework
+# chapatiLMV-XTRAIN:- An efficient, niche model made specifically for mathematicical solutions.
+
 <img width="273" height="100" alt="logo" src="https://github.com/user-attachments/assets/fb07aeb1-fdc2-4c46-954a-cd85aac062aa" />
 
-# Project Overview  
-The XTRAIN project is designed as a state-of-the-art framework for training machine learning models efficiently. This README provides an overview of the project, installation instructions, usage examples, and guidelines for contribution.
+> Train ML models efficiently on CPUs — no GPU required.
+
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) 
+
+## Project Overview  
+The XTRAIN project is designed as a state-of-the-art framework for training machine learning models efficiently. 
+This README provides an overview of the project, installation instructions, usage examples, and guidelines for contribution.
+
+## Why XTRAIN?
+Stop chasing 900-billion-dollar GPUs. Start training on the hardware you already own.
+
+XTRAIN is engineered for developers who demand high-performance AI training without the prohibitive cost of enterprise GPUs. We specialize in CPU-native optimization, turning standard high-end processors into training powerhouses.
+
+- Optimized for CPU architectures (tested on AMD EPYC and Intel Xeon)
+- Uses JIT compilation (Numba) for performance improvements
+- Designed for efficient memory usage during long training runs
+
+## Who is this for?
+
+- Developers without access to GPUs
+- Students working on ML projects on laptops
+- Researchers experimenting with CPU-based training pipelines
 
 ## Features  
 - **Easy Installation**: Simple setup process to get started.  
@@ -24,38 +44,68 @@ To install XTRAIN, follow these simple steps:
 ### Basic Usage  
 ```python  
 import xtrain  
-model = xtrain.Model()  
-model.train(data)
-import xtrain  
-model = xtrain.Model(parameters)  
-model.train(data, advanced=True)
 
+# Example dataset (numpy or pandas)
+data = load_dataset("sample.csv")
+
+# Initialize with optimized CPU engine
+model = xtrain.Model(engine="cpu_high_perf") 
+
+# Train with parallel multi-core scaling
+model.train(data, parallel=True, advanced=True)
 ```
 
-Architecture
-XTRAIN is built on a modular architecture that consists of three main layers:
+## Architecture
+ChapatiLMV follows a modular reasoning-based architecture:
 
-Data Layer: Handles data ingestion and preprocessing.
-Model Layer: Core algorithms for training and evaluation.
-Interface Layer: User interfaces for model management and monitoring.
-Advanced Usage
-For advanced use cases, refer to the docs directory for detailed examples and performance tuning tips.
+- **Input Layer**: Accepts raw user queries or datasets.
+- **Task Classifier (Symbolic Router)**: Determines the type of problem (Arithmetic, Algebra, Geometry).
+- **Specialized Engines**: Domain-specific modules handle computation.
+- **Reasoning Layer**: Combines outputs into coherent results.
+- **Output Layer**: Produces final predictions or answers.
 
-Performance Optimization
+```mermaid
+flowchart TD
+    A[Input] --> B{Symbolic Router}
+    B -- Arithmetic --> C[Arithmetic Engine]
+    B -- Algebra --> D[Algebra Engine]
+    B -- Geometry --> E[Geometry Engine]
+    C --> F[Thought Engine / Reasoning]
+    D --> F[Thought Engine / Reasoning]
+    E --> F[Thought Engine / Reasoning]
+    F --> G[Output]
+```
+
+## Research & Specialized Models: ChapatiLMV (Beta)
+ChapatiLMV is our flagship Domain-Specific Expert model, designed to improve mathematical reasoning in LLMs through architectural specialization.
+
+| Feature | Technical Implementation | Impact |
+|---------|--------------------------|--------|
+| Numerical Precision | R2L Tokenization | Processes digits right-to-left to mimic human arithmetic logic |
+| Logic Branching | Dual-Symbolic Routing | Instant, zero-latency routing for Arithmetic, Algebra, and Geometry |
+| Compute Efficiency | Tekken Filtering | Selective tokenization that strips "noise" to focus on numerical symbols |
+
+### Future Roadmap:
+Transitioning from Rule-Based Symbolic Routers to Lightweight Neural Intent Classifiers (MLPs) for complex reasoning.
+
+
+### Performance Optimization
 To optimize the performance of your model training, consider the following strategies:
 
-Utilize batching.
-Use caching for frequently accessed data.
-Optimize hyperparameters using grid search.
-Benchmarks
+- Use batching to improve throughput
+- Use caching for frequently accessed data.
+- Optimize hyperparameters using grid search.
+
+### Benchmarks
 XTRAIN has been benchmarked against several state-of-the-art frameworks, achieving up to 20% faster training times in specific scenarios.
 
-Troubleshooting
-If you encounter any issues, please check the common problems list in the docs directory. Common troubleshooting steps include:
+## Troubleshooting
+If you encounter any issues:
 
-Ensure all dependencies are installed.
-Check for compatibility issues.
-Contribution Guidelines
+- Ensure all dependencies are installed
+- Check for compatibility issues
+
+## Contribution Guidelines
 We welcome contributions! Please read our CONTRIBUTING.md file for guidelines on how to get involved.
 For any issues, please open a ticket in the issue tracker or contact the maintainers directly.
 

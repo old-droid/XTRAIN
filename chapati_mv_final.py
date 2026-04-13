@@ -703,7 +703,9 @@ class NeuralMVTrainer:
                 eps = 1e-4
                 for attr in ["fc1_w", "fc1_b", "fc2_w", "fc2_b"]:
                     arr = getattr(self.model.detector, attr)
-                    for idx in np.ndindex(arr.shape):
+                    flat = arr.flatten()
+                    for i in range(min(len(flat), 50)):
+                        idx = np.unravel_index(i, arr.shape)
                         orig = arr[idx]
                         arr[idx] = orig + eps
                         pred_plus = self.model.detector.forward(text)

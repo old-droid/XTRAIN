@@ -240,8 +240,9 @@ class GradientCheckpoint:
     Beneficial for very large models.
     """
     
-    def __init__(self, forward_fn: Callable, *args):
+    def __init__(self, forward_fn: Callable, backward_fn: Callable, *args):
         self.forward_fn = forward_fn
+        self.backward_fn = backward_fn
         self.args = args
         self.output = None
     
@@ -255,9 +256,9 @@ class GradientCheckpoint:
         Re-compute forward pass and execute backward.
         Requires stored inputs and output.
         """
-        # Re-compute forward (cached inputs)
+        # Re-compute forward and then execute backward
         _ = self.forward_fn(*self.args)
-        
+        return self.backward_fn(grad_output, *self.args)
         # Would need custom backward for each layer
         # This is a placeholder for the checkpointing interface
         return None
@@ -390,7 +391,7 @@ class SGDOptimizer:
             
             # Update parameters
             if self.nesterov:
-                param[:] = param + self.momentum * v - self.learning_rate * grad
+                param[:] = param + self.momentum * v
             else:
                 param[:] = param + v
 
