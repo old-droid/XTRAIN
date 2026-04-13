@@ -5,6 +5,8 @@ Implements distributed training, model compilation, and export functionality
 """
 
 import numpy as np
+from nn_layers import ReGLU, Dense, RobustNeuralNet
+import numpy as np
 import os
 import json
 import pickle
