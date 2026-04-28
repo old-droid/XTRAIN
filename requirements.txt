@@ -2,3 +2,4 @@ flask
 numpy
 numba
 psutil
+huggingface_hub
