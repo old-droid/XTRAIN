@@ -3,7 +3,7 @@ import os
 
 def download_model():
     repo_id = "Syphaxtwt/ChapatiLMV"
-    filename = "train_mv_weights.npz"
+    filename = "train_mv_weights(1).npz"
     
     # Define the target directory
     target_dir = os.path.join(os.getcwd(), "weights")
