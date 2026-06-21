@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple, Optional, Any
 
 from config import get_config, CPUWarpMLConfig
 from backpropagation_optimized import AdamOptimizer, SGDOptimizer, AdamWOptimizer, cross_entropy_loss_backward_stable
-from numba_kernels import numba_matmul_2d, NUMBA_AVAILABLE
+from numba_kernels import NUMBA_AVAILABLE
 import cpuwarp_ml
 from nn_layers import ReGLU, Dense
 from dataset_loaders import get_dataset_loader
