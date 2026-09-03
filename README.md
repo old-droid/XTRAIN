@@ -4,7 +4,7 @@
 
 > Train ML models efficiently on CPUs — no GPU required.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)  [![Good old docs](https://deepwiki.com/badge.svg)](https://deepwiki.com/MangalanLabs/XTRAIN)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)  Wiki:https://app.devin.ai/org/byte-sized-labs-7705b5f7bf994413988290584a26230e/wiki/MangalanLabs/XTRAIN?branch=Master
 
 ## Project Overview  
 The XTRAIN project is designed as a state-of-the-art framework for training machine learning models efficiently. 
